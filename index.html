@@ -30,7 +30,7 @@
         const COMPANY_NAME = 'West Chicago';
         
         // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
-        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzO6JpCEM9P-T2YmBBZxf0eX4vTV9yw0yyQd801VSeySZ1NOHrJ-xL8uzoRE-3L1QtJBw/exec';
+        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwz8HjA9EiKJBjK2l_Pf7gLff_1ZxzP2QnzqTFZICrtfGouedDoTKKkGBEE2t13nTErTA/exec';
 
         // REQUIRED AGREEMENT DOCUMENT (must be opened before signing)
         const REQUIRED_AGREEMENT_DOC = 'Visitor-Contractor GMP PDF Sign Off Rev 01_7-19-24.pdf';
@@ -101,7 +101,7 @@
             companyHost: '',
             visitType: '',
             purpose: '',
-            date: new Date().toISOString().split('T')[0]
+            date: new Date().toLocaleDateString('en-US')
           });
           const [checkOutName, setCheckOutName] = useState('');
           const [agreementSigned, setAgreementSigned] = useState(false);
@@ -125,27 +125,49 @@
           // Fetch visitors using GET with URL params
           const fetchVisitors = async () => {
             setIsLoadingVisitors(true);
-            setDebugInfo('Fetching visitors...');
+            setDebugInfo('Fetching active visitors...');
+            
             try {
               const url = `${GOOGLE_SHEET_URL}?action=getActiveVisitors&t=${Date.now()}`;
-              console.log('Fetching:', url);
+              console.log('Fetching from:', url);
               
-              const response = await fetch(url);
+              const response = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow'
+              });
+              
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              
               const text = await response.text();
-              console.log('Response:', text);
+              console.log('Response text:', text);
               
-              const result = JSON.parse(text);
+              let result;
+              try {
+                result = JSON.parse(text);
+              } catch (parseError) {
+                console.error('Failed to parse JSON:', text);
+                setDebugInfo('Error: Invalid response from server');
+                setVisitors([]);
+                return;
+              }
               
-              if (result.status === 'success' && Array.isArray(result.data)) {
-                setVisitors(result.data);
-                setDebugInfo(`Loaded ${result.data.length} active visitors`);
+              console.log('Parsed result:', result);
+              
+              if (result.status === 'success') {
+                const activeVisitors = result.data || [];
+                setVisitors(activeVisitors);
+                setDebugInfo(`Loaded ${activeVisitors.length} active visitor${activeVisitors.length !== 1 ? 's' : ''}`);
               } else {
-                setDebugInfo(`No data: ${JSON.stringify(result)}`);
+                setDebugInfo(`Error: ${result.message || 'Unknown error'}`);
+                setVisitors([]);
               }
               
             } catch (error) {
-              console.error('Error:', error);
+              console.error('Fetch error:', error);
               setDebugInfo(`Error: ${error.message}`);
+              setVisitors([]);
             } finally {
               setIsLoadingVisitors(false);
             }
@@ -157,23 +179,22 @@
             }
           }, [activeTab]);
 
-          // Save to Google Sheets using POST with JSON
+          // Save to Google Sheets using POST with form submission
           const saveToGoogleSheets = async (data, action = 'checkin') => {
             try {
               const payload = {
                 action: action,
-                name: data.name,
-                company: data.company,
-                companyHost: data.companyHost,
-                visitType: data.visitType,
-                purpose: data.purpose,
-                date: data.date,
-                checkInTime: data.checkInTime,
-                checkOutTime: data.checkOutTime
+                name: data.name || '',
+                company: data.company || '',
+                companyHost: data.companyHost || '',
+                visitType: data.visitType || '',
+                purpose: data.purpose || '',
+                date: data.date || new Date().toLocaleDateString('en-US'),
+                checkInTime: data.checkInTime || '',
+                checkOutTime: data.checkOutTime || ''
               };
               
-              console.log('=== SENDING DATA ===');
-              console.log('Payload:', JSON.stringify(payload, null, 2));
+              console.log('Submitting:', action, payload);
               
               // Create a hidden form to submit
               const form = document.createElement('form');
@@ -206,11 +227,11 @@
               form.submit();
               document.body.removeChild(form);
               
-              console.log('Form submitted');
+              console.log('Form submitted successfully');
               return true;
               
             } catch (error) {
-              console.error('Error:', error);
+              console.error('Error saving:', error);
               alert('Error saving: ' + error.message);
               return false;
             }
@@ -230,33 +251,37 @@
             
             setIsSaving(true);
             
-            const checkInTime = new Date().toLocaleTimeString();
+            const now = new Date();
+            const checkInTime = now.toLocaleTimeString('en-US');
+            const checkInDate = now.toLocaleDateString('en-US');
+            
             const dataToSend = {
               name: signInData.name,
               company: signInData.company,
               companyHost: signInData.companyHost,
               visitType: signInData.visitType,
               purpose: signInData.purpose,
-              date: signInData.date,
+              date: checkInDate,
               checkInTime: checkInTime
             };
             
             await saveToGoogleSheets(dataToSend, 'checkin');
             
             // Wait a moment for the data to be saved
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             
             setIsSaving(false);
             
-            alert(`Check-in successful!\n\n${signInData.name} from ${signInData.company} has been logged.\n\nPlease check your Google Sheet.`);
+            alert(`Check-in successful!\n\n${signInData.name} from ${signInData.company} has been checked in.\n\nTime: ${checkInTime}`);
             
+            // Reset form
             setSignInData({
               name: '',
               company: '',
               companyHost: '',
               visitType: '',
               purpose: '',
-              date: new Date().toISOString().split('T')[0]
+              date: new Date().toLocaleDateString('en-US')
             });
 
             setAgreementSigned(false);
@@ -274,8 +299,9 @@
             
             setIsSaving(true);
             
-            const checkOutDate = new Date().toLocaleDateString();
-            const checkOutTime = new Date().toLocaleTimeString();
+            const now = new Date();
+            const checkOutDate = now.toLocaleDateString('en-US');
+            const checkOutTime = now.toLocaleTimeString('en-US');
             
             await saveToGoogleSheets({
               name: checkOutName,
@@ -283,11 +309,11 @@
               checkOutTime: checkOutTime
             }, 'checkout');
             
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             
             setIsSaving(false);
             
-            alert(`Check-out successful!\n\n${checkOutName} has been logged out.`);
+            alert(`Check-out successful!\n\n${checkOutName} has been checked out.\n\nTime: ${checkOutTime}`);
             
             setCheckOutName('');
           };
@@ -440,12 +466,8 @@
                         <label className="block text-sm font-medium text-gray-700 mb-2">Purpose of Visit *</label>
                         <textarea value={signInData.purpose} onChange={(e) => setSignInData({...signInData, purpose: e.target.value})} rows="3" className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-900 focus:border-transparent" />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                        <input type="date" value={signInData.date} onChange={(e) => setSignInData({...signInData, date: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-900 focus:border-transparent" />
-                      </div>
                       <button onClick={handleSignIn} disabled={isSaving} className="w-full burgundy-bg text-white py-3 rounded-lg font-medium burgundy-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isSaving ? 'Saving...' : 'Check In'}
+                        {isSaving ? 'Checking In...' : 'Check In'}
                       </button>
                     </div>
                   </div>
@@ -460,7 +482,7 @@
                         <input type="text" value={checkOutName} onChange={(e) => setCheckOutName(e.target.value)} placeholder="Enter your name to check out" className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-900 focus:border-transparent" />
                       </div>
                       <button onClick={handleCheckOut} disabled={isSaving} className="w-full burgundy-bg text-white py-3 rounded-lg font-medium burgundy-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isSaving ? 'Saving...' : 'Check Out'}
+                        {isSaving ? 'Checking Out...' : 'Check Out'}
                       </button>
                     </div>
                   </div>
@@ -478,7 +500,7 @@
                           <li>Follow all OSI Procedures during the visit</li>
                           <li>Stay within designated areas unless escorted</li>
                           <li>Not access or remove confidential company documents</li>
-                          <li>Not take photographs, videos, or recordings without prior permitssion</li>
+                          <li>Not take photographs, videos, or recordings without prior permission</li>
                           <li>Follow all environmental and waste disposal procedures</li>
                           <li>Keep workspaces, walkways, and common areas clean</li>
                           <li>Respect company equipment and property</li>
@@ -592,7 +614,7 @@
                       <div className="text-center py-12 text-gray-500">
                         <UserIcon />
                         <p>No visitors currently checked in</p>
-                        <p className="text-xs mt-2 text-gray-400">Check-in a visitor first, then refresh this page</p>
+                        <p className="text-xs mt-2 text-gray-400">Visitors who check in today will appear here</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
