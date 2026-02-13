@@ -1,1 +1,2 @@
-# VisitorContractor-SMS
+# Contractor-SMS
+Contractor Safety Management System
