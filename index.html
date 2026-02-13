@@ -127,7 +127,7 @@
             setIsLoadingVisitors(true);
             setDebugInfo('Fetching visitors...');
             try {
-              const url = `${GOOGLE_SHEET_URL}?action=getVisitors&t=${Date.now()}`;
+              const url = `${GOOGLE_SHEET_URL}?action=getActiveVisitors&t=${Date.now()}`;
               console.log('Fetching:', url);
               
               const response = await fetch(url);
@@ -138,7 +138,7 @@
               
               if (result.status === 'success' && Array.isArray(result.data)) {
                 setVisitors(result.data);
-                setDebugInfo(`Loaded ${result.data.length} visitors`);
+                setDebugInfo(`Loaded ${result.data.length} active visitors`);
               } else {
                 setDebugInfo(`No data: ${JSON.stringify(result)}`);
               }
@@ -607,7 +607,7 @@
                                 {visitor.purpose && <p className="text-sm text-gray-500 mt-2 italic">{visitor.purpose}</p>}
                               </div>
                               <div className="text-left md:text-right">
-                                <p className="text-sm font-medium burgundy-text">{visitor.checkInTime}</p>
+                                <p className="text-sm font-medium burgundy-text">Check-in: {visitor.checkInTime}</p>
                                 <p className="text-sm text-gray-500">{visitor.date}</p>
                               </div>
                             </div>
