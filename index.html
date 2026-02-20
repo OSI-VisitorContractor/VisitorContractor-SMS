@@ -23,20 +23,42 @@
         const { useState, useRef, useEffect } = React;
 
         // ============================================
-        // CONFIGURATION - CHANGE THIS URL TO YOUR NEW DEPLOYMENT URL
+        // CONFIGURATION - CHANGE THESE VALUES
         // ============================================
         
-        const LOGO_FILE = 'osi-group-logo-vector (1).png';
+        const LOGO_FILE = 'osi-group-logo-vector(1).png';
         const COMPANY_NAME = 'West Chicago';
         
-        // REPLACE THIS WITH YOUR NEW DEPLOYMENT URL FROM STEP 5
-        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwz8HjA9EiKJBjK2l_Pf7gLff_1ZxzP2QnzqTFZICrtfGouedDoTKKkGBEE2t13nTErTA/exec';
+        // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
+        const GOOGLE_SHEET_URL = 'YOUR_DEPLOYMENT_URL_HERE';
 
         const REQUIRED_AGREEMENT_DOC = 'Visitor-Contractor GMP PDF Sign Off Rev 01_7-19-24.pdf';
         
         // ============================================
 
-        // Icons (keeping all the same icons)
+        // Helper function to format time (handles both time strings and date objects)
+        const formatTime = (timeStr) => {
+          if (!timeStr) return '';
+          
+          // If it looks like a date object string, extract just the time
+          if (timeStr.includes('GMT') || timeStr.includes('1899')) {
+            try {
+              const date = new Date(timeStr);
+              return date.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+              });
+            } catch (e) {
+              return timeStr;
+            }
+          }
+          
+          // If it's already a time string, return as-is
+          return timeStr;
+        };
+
+        // Icons
         const UserCheckIcon = () => (
           <svg className="inline w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -127,8 +149,6 @@
             
             try {
               const url = `${GOOGLE_SHEET_URL}?action=getActiveVisitors&t=${Date.now()}`;
-              console.log('Fetching:', url);
-              console.log('Today date:', today);
               
               const response = await fetch(url, {
                 method: 'GET',
@@ -141,36 +161,27 @@
               }
               
               const text = await response.text();
-              console.log('Raw response:', text);
               
               let result;
               try {
                 result = JSON.parse(text);
               } catch (parseError) {
-                console.error('Parse error:', parseError);
                 setDebugInfo('Error: Invalid response format');
                 setVisitors([]);
                 return;
               }
               
-              console.log('Parsed result:', result);
-              
               if (result.status === 'success') {
                 const activeVisitors = result.data || [];
                 setVisitors(activeVisitors);
                 setDebugInfo(`Found ${activeVisitors.length} visitor${activeVisitors.length !== 1 ? 's' : ''} checked in today (${today})`);
-                
-                if (activeVisitors.length === 0) {
-                  console.log('No visitors found. Check that dates in Sheet1 match:', today);
-                }
               } else {
                 setDebugInfo(`Error: ${result.message || 'Unknown error'}`);
                 setVisitors([]);
               }
               
             } catch (error) {
-              console.error('Fetch error:', error);
-              setDebugInfo(`Error: ${error.message}. The script may not be deployed correctly.`);
+              setDebugInfo(`Error: ${error.message}`);
               setVisitors([]);
             } finally {
               setIsLoadingVisitors(false);
@@ -196,8 +207,6 @@
                 checkInTime: data.checkInTime || '',
                 checkOutTime: data.checkOutTime || ''
               };
-              
-              console.log('Submitting:', action, payload);
               
               const form = document.createElement('form');
               form.method = 'POST';
@@ -227,11 +236,9 @@
               form.submit();
               document.body.removeChild(form);
               
-              console.log('Form submitted');
               return true;
               
             } catch (error) {
-              console.error('Save error:', error);
               alert('Error: ' + error.message);
               return false;
             }
@@ -252,7 +259,11 @@
             setIsSaving(true);
             
             const now = new Date();
-            const checkInTime = now.toLocaleTimeString('en-US');
+            const checkInTime = now.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
             const checkInDate = now.toLocaleDateString('en-US');
             
             const dataToSend = {
@@ -298,7 +309,11 @@
             
             const now = new Date();
             const checkOutDate = now.toLocaleDateString('en-US');
-            const checkOutTime = now.toLocaleTimeString('en-US');
+            const checkOutTime = now.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
             
             await saveToGoogleSheets({
               name: checkOutName,
@@ -623,10 +638,14 @@
                                 <p className="text-sm text-gray-600 mt-1">{visitor.company}</p>
                                 <p className="text-sm text-gray-500">Host: {visitor.companyHost}</p>
                                 <p className="text-sm text-gray-500">Type: {visitor.visitType}</p>
-                                {visitor.purpose && <p className="text-sm text-gray-500 mt-2 italic">{visitor.purpose}</p>}
+                                {visitor.purpose && visitor.purpose !== 'Testing date format fix' && (
+                                  <p className="text-sm text-gray-500 mt-2 italic">{visitor.purpose}</p>
+                                )}
                               </div>
                               <div className="text-left md:text-right">
-                                <p className="text-sm font-medium burgundy-text">Check-in: {visitor.checkInTime}</p>
+                                <p className="text-sm font-medium burgundy-text">
+                                  Check-in: {formatTime(visitor.checkInTime)}
+                                </p>
                                 <p className="text-sm text-gray-500">{visitor.date}</p>
                               </div>
                             </div>
